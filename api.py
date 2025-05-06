@@ -35,6 +35,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Create tables
+Base.metadata.create_all(bind=engine)
+
 class JobResponse(BaseModel):
     id: int
     job_title: str
@@ -168,25 +171,48 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow()}
 
 @app.get("/api/scrape")
-def trigger_scrape(db: Session = Depends(get_db)):
+async def trigger_scrape(db: Session = Depends(get_db)):
+    """
+    Trigger job scraping and update the database.
+    This endpoint is called by the cron job service.
+    """
     try:
-        # Clear existing jobs
-        db.query(Job).delete()
+        # Clear existing jobs from all tables
+        db.query(RegularJob).delete()
+        db.query(FreshersJob).delete()
+        db.query(InternshipJob).delete()
         
         # Scrape new jobs
         jobs = scrape_jobs()
         
-        # Add jobs to database
+        # Add jobs to appropriate tables
         for job in jobs:
-            db_job = Job(**job)
+            job_type = job.get('job_type', '').lower()
+            if job_type == 'regular':
+                db_job = RegularJob(**job)
+            elif job_type == 'freshers':
+                db_job = FreshersJob(**job)
+            elif job_type == 'internships':
+                db_job = InternshipJob(**job)
+            else:
+                logger.warning(f"Unknown job type: {job_type}")
+                continue
+                
             db.add(db_job)
         
         db.commit()
-        return {"status": "success", "message": f"Scraped {len(jobs)} jobs successfully"}
+        return {
+            "status": "success",
+            "message": f"Scraped {len(jobs)} jobs successfully",
+            "timestamp": datetime.utcnow()
+        }
     except Exception as e:
         logger.error(f"Error during scraping: {str(e)}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error during scraping: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error during scraping: {str(e)}"
+        )
 
 if __name__ == "__main__":
     import uvicorn
