@@ -11,6 +11,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from typing import Optional, Dict, Any, Type
 import backoff
 from datetime import datetime
+from urllib.parse import urljoin
+import html
 
 class ScrapingError(Exception):
     """Custom exception for scraping errors"""
@@ -32,6 +34,16 @@ def ensure_tables_exist():
             elif table == 'internship_jobs':
                 InternshipJob.__table__.create(engine)
 
+def clean_salary(salary: str) -> str:
+    """Clean salary string"""
+    if not salary:
+        return ""
+    return salary.replace("\u20b9", "INR").replace("₹", "INR").replace("?", "INR").strip()
+
+def clean_text(text: str) -> str:
+    """Clean text string"""
+    return html.unescape(text.strip()) if text else ""
+
 @backoff.on_exception(
     backoff.expo,
     (RequestException, SQLAlchemyError),
@@ -47,44 +59,49 @@ def make_request(url: str) -> requests.Response:
     response.raise_for_status()
     return response
 
-def extract_job_details(job_element: BeautifulSoup) -> Optional[Dict[str, Any]]:
+def extract_job_details(job_element: BeautifulSoup, base_url: str) -> Optional[Dict[str, Any]]:
     """Extract job details from HTML element with error handling"""
     try:
-        # Get the job title and company
-        title_elem = job_element.find('h2', class_='job-title')
-        company_elem = job_element.find('div', class_='company')
+        # Get the job title
+        title = clean_text(job_element.select_one("h2.text-lg").text) if job_element.select_one("h2.text-lg") else ""
         
-        # Get location
-        location_elem = job_element.find('div', class_='job-location')
+        # Get company and location
+        company_location = clean_text(job_element.select_one("p.text-gray-600").text) if job_element.select_one("p.text-gray-600") else ""
         
         # Get salary
-        salary_elem = job_element.find('div', class_='job-salary')
-        
-        # Get job type
-        job_type_elem = job_element.find('div', class_='job-category')
+        salary_raw = clean_text(job_element.select_one("p.text-green-600").text) if job_element.select_one("p.text-green-600") else ""
+        salary = clean_salary(salary_raw)
         
         # Get posted date
-        posted_elem = job_element.find('div', class_='job-posted')
+        posted_date = clean_text(job_element.select_one("p.text-gray-500").text) if job_element.select_one("p.text-gray-500") else ""
+        
+        # Get tags (years and job type)
+        tags = job_element.select("div.mt-2 span.text-sm")
+        years = clean_text(tags[0].text) if len(tags) > 0 else ""
+        job_type = clean_text(tags[1].text) if len(tags) > 1 else ""
         
         # Get skills
-        skills_elem = job_element.find('div', class_='job-skills')
+        skills_list = [clean_text(s.text) for s in job_element.select("div.flex-wrap.gap-2.mt-3 span")]
+        skills = ", ".join(skills_list)
         
         # Get apply URL
-        apply_link = job_element.find('a', class_='job-apply')
+        apply_button = job_element.select_one("a.bg-blue-600")
+        apply_url = urljoin(base_url, apply_button["href"]) if apply_button and "href" in apply_button.attrs else ""
         
         # Get company logo
-        logo_elem = job_element.find('img', class_='company-image')
+        img_tag = job_element.select_one("img.rounded-lg")
+        logo_url = urljoin(base_url, img_tag["src"]) if img_tag and "src" in img_tag.attrs else ""
         
         return {
-            'job_title': title_elem.text.strip() if title_elem else 'N/A',
-            'company_location': f"{company_elem.text.strip() if company_elem else 'N/A'} - {location_elem.text.strip() if location_elem else 'N/A'}",
-            'salary': salary_elem.text.strip() if salary_elem else 'N/A',
-            'job_type': job_type_elem.text.strip() if job_type_elem else 'N/A',
-            'posted': posted_elem.text.strip() if posted_elem else 'N/A',
-            'skills': skills_elem.text.strip() if skills_elem else 'N/A',
-            'eligible_years': 'N/A',  # Not available in current structure
-            'apply_url': apply_link['href'] if apply_link else 'N/A',
-            'company_logo': logo_elem['src'] if logo_elem else None,
+            'job_title': title,
+            'company_location': company_location,
+            'salary': salary,
+            'job_type': job_type,
+            'posted': posted_date,
+            'skills': skills,
+            'eligible_years': years,
+            'apply_url': apply_url,
+            'company_logo': logo_url,
             'created_at': datetime.utcnow(),
             'updated_at': datetime.utcnow()
         }
@@ -117,39 +134,48 @@ def scrape_and_save_jobs(source_type: str) -> None:
         
         # Determine URL based on source type
         url_map = {
-            "Regular": "https://www.talentd.in/jobs",
-            "Freshers": "https://www.talentd.in/jobs/freshers",
-            "Internships": "https://www.talentd.in/jobs/internships"
+            "Regular": "https://www.talentd.in/jobs?page=",
+            "Freshers": "https://www.talentd.in/jobs/freshers?page=",
+            "Internships": "https://www.talentd.in/jobs/internships?page="
         }
         
-        url = url_map[source_type]
-        logger.info(f"Scraping jobs from {url}")
+        base_url = url_map[source_type]
         
-        # Make request with retry logic
-        response = make_request(url)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Find all job listings
-        job_listings = soup.find_all('div', class_='job-listing')
-        logger.info(f"Found {len(job_listings)} job listings")
+        # Get first page to detect total pages
+        first_page = make_request(base_url + "1")
+        soup = BeautifulSoup(first_page.text, "html.parser")
+        pagination = soup.select("div.hidden.sm\\:flex a[href*='page=']")
+        last_page = max([int(a.text.strip()) for a in pagination if a.text.strip().isdigit()] or [1])
+        logger.info(f"Total pages detected for {source_type}: {last_page}")
         
         successful_jobs = 0
-        for job in job_listings:
-            try:
-                job_details = extract_job_details(job)
-                if not job_details:
-                    continue
+        for page in range(1, last_page + 1):
+            logger.info(f"Scraping page {page} of {last_page} for {source_type}...")
+            response = make_request(base_url + str(page))
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            # Find all job listings
+            job_cards = soup.find_all("div", class_="!bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50 p-4 hover:shadow-lg transition-all hover:border-blue-200/50")
+            logger.info(f"Found {len(job_cards)} jobs on page {page}")
+            
+            for job in job_cards:
+                try:
+                    job_details = extract_job_details(job, base_url)
+                    if not job_details:
+                        continue
+                        
+                    # Create new job entry
+                    new_job = JobModel(**job_details)
+                    db.add(new_job)
+                    successful_jobs += 1
                     
-                # Create new job entry
-                new_job = JobModel(**job_details)
-                db.add(new_job)
-                successful_jobs += 1
-                
-            except Exception as e:
-                logger.error(f"Error processing job: {str(e)}")
-                continue
+                except Exception as e:
+                    logger.error(f"Error processing job: {str(e)}")
+                    continue
+            
+            db.commit()
+            time.sleep(2)  # Add delay between pages
         
-        db.commit()
         logger.info(f"Successfully saved {successful_jobs} jobs for {source_type}")
                 
     except Exception as e:
@@ -169,7 +195,7 @@ def run_all_scrapers() -> None:
         try:
             logger.info(f"Starting scraper for {source} jobs")
             scrape_and_save_jobs(source)
-            time.sleep(2)  # Add delay between requests
+            time.sleep(2)  # Add delay between sources
         except ScrapingError as e:
             logger.error(f"Scraper failed for {source}: {str(e)}")
             continue
