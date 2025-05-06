@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from models import RegularJob, FreshersJob, InternshipJob, Base, Job
+from models import RegularJob, FreshersJob, InternshipJob, Base
 from config import get_db, engine, logger
 from pydantic import BaseModel, HttpUrl, validator
 from datetime import datetime
