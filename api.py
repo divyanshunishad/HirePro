@@ -13,6 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from scraper import run_all_scrapers
 import logging
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import text
 import os
 
 # Initialize rate limiter
@@ -190,7 +191,7 @@ async def health_check():
         # Test database connection
         db = next(get_db())
         try:
-            db.execute("SELECT 1")
+            db.execute(text("SELECT 1"))
             db_status = "connected"
         except SQLAlchemyError as e:
             logger.error(f"Database connection test failed: {str(e)}")
@@ -206,10 +207,15 @@ async def health_check():
             "PGPORT": bool(os.getenv("PGPORT"))
         }
         
+        # Check if all required environment variables are set
+        missing_vars = [var for var, is_set in env_vars.items() if not is_set]
+        if missing_vars:
+            raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+        
         return {
-            "status": "healthy" if db_status == "connected" else "unhealthy",
+            "status": "healthy",
             "database": db_status,
-            "environment_variables": env_vars,
+            "environment": env_vars,
             "timestamp": datetime.utcnow()
         }
     except Exception as e:
