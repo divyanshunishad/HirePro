@@ -3,20 +3,20 @@ services:
     name: hirepro-api
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.0
-      - key: DB_USER
-        value: if0_38916982
-      - key: DB_PASSWORD
-        value: T32XK4YpNOErX
-      - key: DB_HOST
-        value: sql303.infinityfree.com
-      - key: DB_NAME
-        value: if0_38916982_hirepro
-      - key: DB_PORT
-        value: "3306"
+      - key: PGUSER
+        sync: false
+      - key: PGPASSWORD
+        sync: false
+      - key: PGHOST
+        sync: false
+      - key: PGDATABASE
+        sync: false
+      - key: PGPORT
+        sync: false
 
   - type: cron
     name: hirepro-scraper
