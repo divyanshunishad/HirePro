@@ -3,20 +3,20 @@ services:
     name: hirepro-api
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 4
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.0
       - key: PGUSER
-        sync: false
+        value: postgres
       - key: PGPASSWORD
-        sync: false
+        value: ugSYeuYDVcQariTdoRXsHBJaOumcgauX
       - key: PGHOST
-        sync: false
+        value: trolley.proxy.rlwy.net
       - key: PGDATABASE
-        sync: false
+        value: railway
       - key: PGPORT
-        sync: false
+        value: "40947"
 
   - type: cron
     name: hirepro-scraper
@@ -27,13 +27,13 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.0
-      - key: DB_USER
-        value: if0_38916982
-      - key: DB_PASSWORD
-        value: T32XK4YpNOErX
-      - key: DB_HOST
-        value: sql303.infinityfree.com
-      - key: DB_NAME
-        value: if0_38916982_hirepro
-      - key: DB_PORT
-        value: "3306" 
+      - key: PGUSER
+        value: postgres
+      - key: PGPASSWORD
+        value: ugSYeuYDVcQariTdoRXsHBJaOumcgauX
+      - key: PGHOST
+        value: trolley.proxy.rlwy.net
+      - key: PGDATABASE
+        value: railway
+      - key: PGPORT
+        value: "40947" 
