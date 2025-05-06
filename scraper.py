@@ -10,6 +10,7 @@ from requests.exceptions import RequestException
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Optional, Dict, Any, Type
 import backoff
+from datetime import datetime
 
 class ScrapingError(Exception):
     """Custom exception for scraping errors"""
@@ -49,16 +50,43 @@ def make_request(url: str) -> requests.Response:
 def extract_job_details(job_element: BeautifulSoup) -> Optional[Dict[str, Any]]:
     """Extract job details from HTML element with error handling"""
     try:
+        # Get the job title and company
+        title_elem = job_element.find('h3', class_='job-title')
+        company_elem = job_element.find('div', class_='company-name')
+        
+        # Get location
+        location_elem = job_element.find('div', class_='location')
+        
+        # Get salary
+        salary_elem = job_element.find('div', class_='salary')
+        
+        # Get job type
+        job_type_elem = job_element.find('div', class_='job-type')
+        
+        # Get posted date
+        posted_elem = job_element.find('div', class_='posted-date')
+        
+        # Get skills
+        skills_elem = job_element.find('div', class_='skills')
+        
+        # Get apply URL
+        apply_link = job_element.find('a', class_='apply-button')
+        
+        # Get company logo
+        logo_elem = job_element.find('img', class_='company-logo')
+        
         return {
-            'job_title': job_element.find('h2').text.strip(),
-            'company_location': job_element.find('div', class_='company').text.strip(),
-            'salary': job_element.find('div', class_='salary').text.strip(),
-            'job_type': job_element.find('div', class_='job-type').text.strip(),
-            'posted': job_element.find('div', class_='posted').text.strip(),
-            'skills': job_element.find('div', class_='skills').text.strip(),
-            'eligible_years': job_element.find('div', class_='eligible-years').text.strip(),
-            'apply_url': job_element.find('a', class_='apply-link')['href'],
-            'company_logo': job_element.find('img', class_='company-logo')['src'] if job_element.find('img', class_='company-logo') else None
+            'job_title': title_elem.text.strip() if title_elem else 'N/A',
+            'company_location': f"{company_elem.text.strip() if company_elem else 'N/A'} - {location_elem.text.strip() if location_elem else 'N/A'}",
+            'salary': salary_elem.text.strip() if salary_elem else 'N/A',
+            'job_type': job_type_elem.text.strip() if job_type_elem else 'N/A',
+            'posted': posted_elem.text.strip() if posted_elem else 'N/A',
+            'skills': skills_elem.text.strip() if skills_elem else 'N/A',
+            'eligible_years': 'N/A',  # Not available in current structure
+            'apply_url': apply_link['href'] if apply_link else 'N/A',
+            'company_logo': logo_elem['src'] if logo_elem else None,
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow()
         }
     except (AttributeError, KeyError) as e:
         logger.error(f"Error extracting job details: {str(e)}")
@@ -102,7 +130,7 @@ def scrape_and_save_jobs(source_type: str) -> None:
         soup = BeautifulSoup(response.text, 'html.parser')
         
         # Find all job listings
-        job_listings = soup.find_all('div', class_='job-listing')
+        job_listings = soup.find_all('div', class_='job-card')  # Updated class name
         logger.info(f"Found {len(job_listings)} job listings")
         
         successful_jobs = 0
@@ -113,16 +141,15 @@ def scrape_and_save_jobs(source_type: str) -> None:
                     continue
                     
                 # Create new job entry
-                new_job = JobModel.create(
-                    db,
-                    **job_details
-                )
+                new_job = JobModel(**job_details)
+                db.add(new_job)
                 successful_jobs += 1
                 
             except Exception as e:
                 logger.error(f"Error processing job: {str(e)}")
                 continue
-                
+        
+        db.commit()
         logger.info(f"Successfully saved {successful_jobs} jobs for {source_type}")
                 
     except Exception as e:
