@@ -198,18 +198,20 @@ async def trigger_scrape(db: Session = Depends(get_db)):
     This endpoint is called by the cron job service.
     """
     try:
-        # Clear existing jobs from all tables
-        db.query(RegularJob).delete()
-        db.query(FreshersJob).delete()
-        db.query(InternshipJob).delete()
-        
-        # Scrape new jobs
+        logger.info("Starting job scraping process...")
         run_all_scrapers()
-        
-        return {"message": "Job scraping completed successfully"}
+        logger.info("Job scraping completed successfully")
+        return {
+            "status": "success",
+            "message": "Job scraping completed successfully",
+            "timestamp": datetime.utcnow()
+        }
     except Exception as e:
         logger.error(f"Error during job scraping: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to scrape jobs")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to scrape jobs: {str(e)}"
+        )
 
 if __name__ == "__main__":
     import uvicorn
