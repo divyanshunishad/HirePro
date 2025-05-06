@@ -22,27 +22,41 @@ wheels/
 
 # Virtual Environment
 venv/
-env/
 ENV/
-
-# Environment Variables
-.env
-.env.*
+env/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+.DS_Store
 
-# Logs
+# Project specific
+.env
 *.log
-logs/
-
-# Database
+state/
+GeoLite2-City.mmdb
 *.db
 *.sqlite3
 
-# OS
-.DS_Store
-Thumbs.db 
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Environment Variables
+.env
+.env.* 
