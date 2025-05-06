@@ -235,7 +235,7 @@ async def trigger_scrape(db: Session = Depends(get_db)):
     try:
         # Check database connection first
         try:
-            db.execute("SELECT 1")
+            db.execute(text("SELECT 1"))
         except SQLAlchemyError as e:
             logger.error(f"Database connection failed before scraping: {str(e)}")
             raise HTTPException(status_code=500, detail="Database connection failed")
