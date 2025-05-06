@@ -16,16 +16,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Database configuration
-DB_USER = os.getenv('DB_USER')
-DB_PASSWORD = os.getenv('DB_PASSWORD')
-DB_HOST = os.getenv('DB_HOST')
-DB_NAME = os.getenv('DB_NAME')
-
-if not all([DB_USER, DB_PASSWORD, DB_HOST, DB_NAME]):
-    raise ValueError("Missing required database environment variables")
+DB_USER = os.getenv('DB_USER', 'if0_38916982')
+DB_PASSWORD = os.getenv('DB_PASSWORD', 'T32XK4YpNOErX')
+DB_HOST = os.getenv('DB_HOST', 'sql303.infinityfree.com')
+DB_NAME = os.getenv('DB_NAME', 'if0_38916982_hirepro')
+DB_PORT = os.getenv('DB_PORT', '3306')
 
 # Create database URL
-SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
+SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # Create engine with connection pool settings
 engine = create_engine(
