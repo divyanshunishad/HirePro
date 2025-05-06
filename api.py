@@ -10,7 +10,7 @@ import time
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from scraper import scrape_jobs
+from scraper import run_all_scrapers
 import logging
 
 # Initialize rate limiter
@@ -183,36 +183,12 @@ async def trigger_scrape(db: Session = Depends(get_db)):
         db.query(InternshipJob).delete()
         
         # Scrape new jobs
-        jobs = scrape_jobs()
+        run_all_scrapers()
         
-        # Add jobs to appropriate tables
-        for job in jobs:
-            job_type = job.get('job_type', '').lower()
-            if job_type == 'regular':
-                db_job = RegularJob(**job)
-            elif job_type == 'freshers':
-                db_job = FreshersJob(**job)
-            elif job_type == 'internships':
-                db_job = InternshipJob(**job)
-            else:
-                logger.warning(f"Unknown job type: {job_type}")
-                continue
-                
-            db.add(db_job)
-        
-        db.commit()
-        return {
-            "status": "success",
-            "message": f"Scraped {len(jobs)} jobs successfully",
-            "timestamp": datetime.utcnow()
-        }
+        return {"message": "Job scraping completed successfully"}
     except Exception as e:
-        logger.error(f"Error during scraping: {str(e)}")
-        db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error during scraping: {str(e)}"
-        )
+        logger.error(f"Error during job scraping: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to scrape jobs")
 
 if __name__ == "__main__":
     import uvicorn
