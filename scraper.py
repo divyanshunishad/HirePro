@@ -51,29 +51,29 @@ def extract_job_details(job_element: BeautifulSoup) -> Optional[Dict[str, Any]]:
     """Extract job details from HTML element with error handling"""
     try:
         # Get the job title and company
-        title_elem = job_element.find('h3', class_='job-title')
-        company_elem = job_element.find('div', class_='company-name')
+        title_elem = job_element.find('h2', class_='job-title')
+        company_elem = job_element.find('div', class_='company')
         
         # Get location
-        location_elem = job_element.find('div', class_='location')
+        location_elem = job_element.find('div', class_='job-location')
         
         # Get salary
-        salary_elem = job_element.find('div', class_='salary')
+        salary_elem = job_element.find('div', class_='job-salary')
         
         # Get job type
-        job_type_elem = job_element.find('div', class_='job-type')
+        job_type_elem = job_element.find('div', class_='job-category')
         
         # Get posted date
-        posted_elem = job_element.find('div', class_='posted-date')
+        posted_elem = job_element.find('div', class_='job-posted')
         
         # Get skills
-        skills_elem = job_element.find('div', class_='skills')
+        skills_elem = job_element.find('div', class_='job-skills')
         
         # Get apply URL
-        apply_link = job_element.find('a', class_='apply-button')
+        apply_link = job_element.find('a', class_='job-apply')
         
         # Get company logo
-        logo_elem = job_element.find('img', class_='company-logo')
+        logo_elem = job_element.find('img', class_='company-image')
         
         return {
             'job_title': title_elem.text.strip() if title_elem else 'N/A',
@@ -130,7 +130,7 @@ def scrape_and_save_jobs(source_type: str) -> None:
         soup = BeautifulSoup(response.text, 'html.parser')
         
         # Find all job listings
-        job_listings = soup.find_all('div', class_='job-card')  # Updated class name
+        job_listings = soup.find_all('div', class_='job-listing')
         logger.info(f"Found {len(job_listings)} job listings")
         
         successful_jobs = 0
