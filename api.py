@@ -2,14 +2,16 @@ from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from models import RegularJob, FreshersJob, InternshipJob
-from config import get_db, logger
+from models import RegularJob, FreshersJob, InternshipJob, Base, Job
+from config import get_db, engine, logger
 from pydantic import BaseModel, HttpUrl, validator
 from datetime import datetime
 import time
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from scraper import scrape_jobs
+import logging
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -164,6 +166,27 @@ async def get_job(
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "timestamp": datetime.utcnow()}
+
+@app.get("/api/scrape")
+def trigger_scrape(db: Session = Depends(get_db)):
+    try:
+        # Clear existing jobs
+        db.query(Job).delete()
+        
+        # Scrape new jobs
+        jobs = scrape_jobs()
+        
+        # Add jobs to database
+        for job in jobs:
+            db_job = Job(**job)
+            db.add(db_job)
+        
+        db.commit()
+        return {"status": "success", "message": f"Scraped {len(jobs)} jobs successfully"}
+    except Exception as e:
+        logger.error(f"Error during scraping: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error during scraping: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
