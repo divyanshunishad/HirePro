@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: hirepro-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: DB_USER
+        value: if0_38916982
+      - key: DB_PASSWORD
+        value: T32XK4YpNOErX
+      - key: DB_HOST
+        value: sql303.infinityfree.com
+      - key: DB_NAME
+        value: if0_38916982_hirepro
+      - key: DB_PORT
+        value: "3306"
+
+  - type: cron
+    name: hirepro-scraper
+    env: python
+    schedule: "0 */6 * * *"  # Run every 6 hours
+    buildCommand: pip install -r requirements.txt
+    startCommand: python scraper.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: DB_USER
+        value: if0_38916982
+      - key: DB_PASSWORD
+        value: T32XK4YpNOErX
+      - key: DB_HOST
+        value: sql303.infinityfree.com
+      - key: DB_NAME
+        value: if0_38916982_hirepro
+      - key: DB_PORT
+        value: "3306" 
