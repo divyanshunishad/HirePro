@@ -18,17 +18,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Database configuration
-DB_USER = os.getenv('DB_USER')
-DB_PASSWORD = os.getenv('DB_PASSWORD')
-DB_HOST = os.getenv('DB_HOST')
-DB_NAME = os.getenv('DB_NAME')
-DB_PORT = os.getenv('DB_PORT', '3306')
+DB_USER = os.getenv('PGUSER')
+DB_PASSWORD = os.getenv('PGPASSWORD')
+DB_HOST = os.getenv('PGHOST')
+DB_NAME = os.getenv('PGDATABASE')
+DB_PORT = os.getenv('PGPORT', '5432')
 
 # Log database configuration (without password)
 logger.info(f"Database configuration: host={DB_HOST}, port={DB_PORT}, user={DB_USER}, database={DB_NAME}")
 
 # Validate required environment variables
-required_vars = ['DB_USER', 'DB_PASSWORD', 'DB_HOST', 'DB_NAME']
+required_vars = ['PGUSER', 'PGPASSWORD', 'PGHOST', 'PGDATABASE']
 missing_vars = [var for var in required_vars if not os.getenv(var)]
 if missing_vars:
     raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
@@ -43,7 +43,7 @@ except socket.gaierror as e:
     raise
 
 # Create database URL
-SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+SQLALCHEMY_DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # Connection retry settings
 MAX_RETRIES = 3
