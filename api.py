@@ -12,6 +12,8 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from scraper import run_all_scrapers
 import logging
+from sqlalchemy.exc import SQLAlchemyError
+import os
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -63,21 +65,25 @@ class JobResponse(BaseModel):
 
 # Helper function for job queries
 def get_filtered_jobs(db: Session, model_class, search: Optional[str] = None, location: Optional[str] = None):
-    query = db.query(model_class)
-    
-    if search:
-        search_terms = search.lower().split()
-        for term in search_terms:
-            query = query.filter(
-                (model_class.job_title.ilike(f"%{term}%")) |
-                (model_class.company_location.ilike(f"%{term}%")) |
-                (model_class.skills.ilike(f"%{term}%"))
-            )
-    
-    if location:
-        query = query.filter(model_class.company_location.ilike(f"%{location}%"))
-    
-    return query.all()
+    try:
+        query = db.query(model_class)
+        
+        if search:
+            search_terms = search.lower().split()
+            for term in search_terms:
+                query = query.filter(
+                    (model_class.job_title.ilike(f"%{term}%")) |
+                    (model_class.company_location.ilike(f"%{term}%")) |
+                    (model_class.skills.ilike(f"%{term}%"))
+                )
+        
+        if location:
+            query = query.filter(model_class.company_location.ilike(f"%{location}%"))
+        
+        return query.all()
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_filtered_jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error occurred")
 
 @app.get("/api/regular-jobs", response_model=List[JobResponse])
 @limiter.limit("60/minute")
@@ -95,6 +101,8 @@ async def get_regular_jobs(
         jobs = get_filtered_jobs(db, RegularJob, search, location)
         logger.info(f"Retrieved {len(jobs)} regular jobs")
         return jobs
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error retrieving regular jobs: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -115,6 +123,8 @@ async def get_freshers_jobs(
         jobs = get_filtered_jobs(db, FreshersJob, search, location)
         logger.info(f"Retrieved {len(jobs)} freshers jobs")
         return jobs
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error retrieving freshers jobs: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -135,6 +145,8 @@ async def get_internships(
         jobs = get_filtered_jobs(db, InternshipJob, search, location)
         logger.info(f"Retrieved {len(jobs)} internship jobs")
         return jobs
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error retrieving internship jobs: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -177,10 +189,27 @@ async def health_check():
     try:
         # Test database connection
         db = next(get_db())
-        db.execute("SELECT 1")
+        try:
+            db.execute("SELECT 1")
+            db_status = "connected"
+        except SQLAlchemyError as e:
+            logger.error(f"Database connection test failed: {str(e)}")
+            db_status = "error"
+            raise
+        
+        # Get environment variables status
+        env_vars = {
+            "PGUSER": bool(os.getenv("PGUSER")),
+            "PGPASSWORD": bool(os.getenv("PGPASSWORD")),
+            "PGHOST": bool(os.getenv("PGHOST")),
+            "PGDATABASE": bool(os.getenv("PGDATABASE")),
+            "PGPORT": bool(os.getenv("PGPORT"))
+        }
+        
         return {
-            "status": "healthy",
-            "database": "connected",
+            "status": "healthy" if db_status == "connected" else "unhealthy",
+            "database": db_status,
+            "environment_variables": env_vars,
             "timestamp": datetime.utcnow()
         }
     except Exception as e:
@@ -198,6 +227,13 @@ async def trigger_scrape(db: Session = Depends(get_db)):
     This endpoint is called by the cron job service.
     """
     try:
+        # Check database connection first
+        try:
+            db.execute("SELECT 1")
+        except SQLAlchemyError as e:
+            logger.error(f"Database connection failed before scraping: {str(e)}")
+            raise HTTPException(status_code=500, detail="Database connection failed")
+        
         logger.info("Starting job scraping process...")
         run_all_scrapers()
         logger.info("Job scraping completed successfully")
@@ -206,6 +242,8 @@ async def trigger_scrape(db: Session = Depends(get_db)):
             "message": "Job scraping completed successfully",
             "timestamp": datetime.utcnow()
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error during job scraping: {str(e)}")
         raise HTTPException(
